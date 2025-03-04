@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3 File Uploader</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            line-height: 1.6;
+        }
+        .upload-container {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 30px 0;
+            transition: all 0.3s;
+            background-color: #f9f9f9;
+        }
+        .upload-container:hover, .upload-container.dragover {
+            border-color: #007bff;
+            background-color: #f0f7ff;
+        }
+        .file-input {
+            display: none;
+        }
+        .upload-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+            transition: background-color 0.3s;
+        }
+        .upload-btn:hover {
+            background-color: #0056b3;
+        }
+        .file-list {
+            margin-top: 20px;
+            text-align: left;
+        }
+        .file-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status {
+            font-size: 14px;
+            padding: 3px 8px;
+            border-radius: 3px;
+        }
+        .status.pending {
+            background-color: #ffeeba;
+            color: #856404;
+        }
+        .status.uploading {
+            background-color: #b8daff;
+            color: #004085;
+        }
+        .status.success {
+            background-color: #c3e6cb;
+            color: #155724;
+        }
+        .status.failed {
+            background-color: #f5c6cb;
+            color: #721c24;
+        }
+        .progress-bar {
+            height: 5px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            margin-top: 5px;
+            position: relative;
+        }
+        .progress {
+            height: 100%;
+            background-color: #007bff;
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.2s;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>S3 File Uploader</h1>
+    <p>Upload your files directly to an Amazon S3 bucket.</p>
+    
+    <div class="upload-container" id="dropZone">
+        <h2>Drag & Drop Files Here</h2>
+        <p>or</p>
+        <input type="file" id="fileInput" class="file-input" multiple>
+        <button class="upload-btn" id="browseBtn">Browse Files</button>
+    </div>
+    
+    <div class="file-list hidden" id="fileList">
+        <h3>Files to Upload</h3>
+        <div id="files"></div>
+        <button class="upload-btn" id="uploadBtn">Upload All Files</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const browseBtn = document.getElementById('browseBtn');
+            const fileList = document.getElementById('fileList');
+            const filesContainer = document.getElementById('files');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            let filesToUpload = [];
+            
+            // Button click handler
+            browseBtn.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // File selection handler
+            fileInput.addEventListener('change', function() {
+                handleFiles(this.files);
+            });
+            
+            // Drag and drop handlers
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+            
+            dropZone.addEventListener('dragleave', function() {
+                dropZone.classList.remove('dragover');
+            });
+            
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            // Upload button handler
+            uploadBtn.addEventListener('click', function() {
+                uploadFiles();
+            });
+            
+            // Function to handle selected files
+            function handleFiles(files) {
+                if (files.length === 0) return;
+                
+                // Add files to our array
+                for (const file of files) {
+                    const fileExists = filesToUpload.some(f => f.name === file.name && f.size === file.size);
+                    if (!fileExists) {
+                        filesToUpload.push(file);
+                    }
+                }
+                
+                // Show file list
+                fileList.classList.remove('hidden');
+                
+                // Render file list
+                renderFileList();
+            }
+            
+            // Function to render file list
+            function renderFileList() {
+                filesContainer.innerHTML = '';
+                
+                filesToUpload.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.id = `file-${index}`;
+                    
+                    const fileInfo = document.createElement('div');
+                    fileInfo.innerHTML = `
+                        <strong>${file.name}</strong> (${formatFileSize(file.size)})
+                        <div class="progress-bar">
+                            <div class="progress" id="progress-${index}"></div>
+                        </div>
+                    `;
+                    
+                    const fileStatus = document.createElement('span');
+                    fileStatus.className = 'status pending';
+                    fileStatus.id = `status-${index}`;
+                    fileStatus.textContent = 'Pending';
+                    
+                    fileItem.appendChild(fileInfo);
+                    fileItem.appendChild(fileStatus);
+                    filesContainer.appendChild(fileItem);
+                });
+            }
+            
+            // Function to upload files
+            function uploadFiles() {
+                if (filesToUpload.length === 0) return;
+                
+                filesToUpload.forEach((file, index) => {
+                    uploadFile(file, index);
+                });
+            }
+            
+            // Function to upload a single file
+            function uploadFile(file, index) {
+                // Update status
+                const statusElement = document.getElementById(`status-${index}`);
+                const progressElement = document.getElementById(`progress-${index}`);
+                
+                statusElement.className = 'status uploading';
+                statusElement.textContent = 'Uploading...';
+                
+                // Create FormData
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Create XHR
+                const xhr = new XMLHttpRequest();
+                
+                // Setup progress listener
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressElement.style.width = percentComplete + '%';
+                    }
+                });
+                
+                // Setup completion listener
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        statusElement.className = 'status success';
+                        statusElement.textContent = 'Uploaded';
+                        
+                        // Remove file from the array
+                        filesToUpload = filesToUpload.filter(f => f !== file);
+                        
+                        // If all files uploaded, reset UI
+                        if (filesToUpload.length === 0) {
+                            setTimeout(() => {
+                                fileList.classList.add('hidden');
+                                filesContainer.innerHTML = '';
+                            }, 3000);
+                        }
+                    } else {
+                        statusElement.className = 'status failed';
+                        statusElement.textContent = 'Failed';
+                    }
+                });
+                
+                // Setup error listener
+                xhr.addEventListener('error', () => {
+                    statusElement.className = 'status failed';
+                    statusElement.textContent = 'Failed';
+                });
+                
+                // Send request to the backend
+                xhr.open('POST', '/upload', true);
+                xhr.send(formData);
+            }
+            
+            // Helper function to format file size
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+        });
+    </script>
+</body>
+</html>
