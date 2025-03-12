@@ -98,8 +98,6 @@
         .hidden {
             display: none;
         }
-        
-        /* Navigation styling */
         .nav {
             display: flex;
             background-color: #f8f9fa;
@@ -123,8 +121,6 @@
             border-bottom: 3px solid #007bff;
             font-weight: bold;
         }
-        
-        /* File browser styling */
         .file-browser {
             margin-top: 20px;
         }
@@ -260,22 +256,12 @@
             
             tabs.forEach(tab => {
                 tab.addEventListener('click', function() {
-                    // Remove active class from all tabs
                     tabs.forEach(t => t.classList.remove('active'));
-                    // Add active class to clicked tab
                     this.classList.add('active');
-                    
-                    // Hide all tab contents
                     tabContents.forEach(content => content.classList.add('hidden'));
-                    
-                    // Show selected tab content
                     const tabId = this.getAttribute('data-tab');
                     document.getElementById(`${tabId}-tab`).classList.remove('hidden');
-                    
-                    // Load files when switching to browse tab
-                    if (tabId === 'browse') {
-                        loadFiles();
-                    }
+                    if (tabId === 'browse') loadFiles();
                 });
             });
             
@@ -289,17 +275,14 @@
             
             let filesToUpload = [];
             
-            // Button click handler
             browseBtn.addEventListener('click', function() {
                 fileInput.click();
             });
             
-            // File selection handler
             fileInput.addEventListener('change', function() {
                 handleFiles(this.files);
             });
             
-            // Drag and drop handlers
             dropZone.addEventListener('dragover', function(e) {
                 e.preventDefault();
                 dropZone.classList.add('dragover');
@@ -315,34 +298,22 @@
                 handleFiles(e.dataTransfer.files);
             });
             
-            // Upload button handler
             uploadBtn.addEventListener('click', function() {
                 uploadFiles();
             });
             
-            // Function to handle selected files
             function handleFiles(files) {
                 if (files.length === 0) return;
-                
-                // Add files to our array
                 for (const file of files) {
                     const fileExists = filesToUpload.some(f => f.name === file.name && f.size === file.size);
-                    if (!fileExists) {
-                        filesToUpload.push(file);
-                    }
+                    if (!fileExists) filesToUpload.push(file);
                 }
-                
-                // Show file list
                 fileList.classList.remove('hidden');
-                
-                // Render file list
                 renderFileList();
             }
             
-            // Function to render file list
             function renderFileList() {
                 filesContainer.innerHTML = '';
-                
                 filesToUpload.forEach((file, index) => {
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
@@ -367,32 +338,23 @@
                 });
             }
             
-            // Function to upload files
             function uploadFiles() {
                 if (filesToUpload.length === 0) return;
-                
-                filesToUpload.forEach((file, index) => {
-                    uploadFile(file, index);
-                });
+                filesToUpload.forEach((file, index) => uploadFile(file, index));
             }
             
-            // Function to upload a single file
             function uploadFile(file, index) {
-                // Update status
                 const statusElement = document.getElementById(`status-${index}`);
                 const progressElement = document.getElementById(`progress-${index}`);
                 
                 statusElement.className = 'status uploading';
                 statusElement.textContent = 'Uploading...';
                 
-                // Create FormData
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                // Create XHR
                 const xhr = new XMLHttpRequest();
                 
-                // Setup progress listener
                 xhr.upload.addEventListener('progress', (e) => {
                     if (e.lengthComputable) {
                         const percentComplete = Math.round((e.loaded / e.total) * 100);
@@ -400,16 +362,12 @@
                     }
                 });
                 
-                // Setup completion listener
                 xhr.addEventListener('load', () => {
                     if (xhr.status >= 200 && xhr.status < 300) {
+                        const response = JSON.parse(xhr.responseText);
                         statusElement.className = 'status success';
-                        statusElement.textContent = 'Uploaded';
-                        
-                        // Remove file from the array
+                        statusElement.textContent = `Uploaded to ${response.regionName}`;
                         filesToUpload = filesToUpload.filter(f => f !== file);
-                        
-                        // If all files uploaded, reset UI
                         if (filesToUpload.length === 0) {
                             setTimeout(() => {
                                 fileList.classList.add('hidden');
@@ -422,13 +380,11 @@
                     }
                 });
                 
-                // Setup error listener
                 xhr.addEventListener('error', () => {
                     statusElement.className = 'status failed';
                     statusElement.textContent = 'Failed';
                 });
                 
-                // Send request to the backend
                 xhr.open('POST', '/upload', true);
                 xhr.send(formData);
             }
@@ -439,10 +395,8 @@
             const fileTableContainer = document.getElementById('fileTableContainer');
             const refreshFilesBtn = document.getElementById('refreshFiles');
             
-            // Refresh button click handler
             refreshFilesBtn.addEventListener('click', loadFiles);
             
-            // Function to load files from server
             async function loadFiles() {
                 fileLoading.style.display = 'flex';
                 fileTableContainer.innerHTML = '';
@@ -453,9 +407,7 @@
                     
                     fileLoading.style.display = 'none';
                     
-                    if (!response.ok) {
-                        throw new Error(data.error || 'Failed to load files');
-                    }
+                    if (!response.ok) throw new Error(data.error || 'Failed to load files');
                     
                     if (!data.files || data.files.length === 0) {
                         fileTableContainer.innerHTML = `
@@ -468,7 +420,6 @@
                         return;
                     }
                     
-                    // Create table with files
                     let tableHTML = `
                         <table class="file-table">
                             <thead>
@@ -482,7 +433,6 @@
                             <tbody>
                     `;
                     
-                    // Create regions dropdown options
                     const regionOptions = Object.entries(data.availableRegions)
                         .map(([code, name]) => `<option value="${code}">${name}</option>`)
                         .join('');
@@ -517,7 +467,6 @@
                     
                     fileTableContainer.innerHTML = tableHTML;
                     
-                    // Add event listeners to download buttons
                     document.querySelectorAll('.download-btn').forEach(btn => {
                         btn.addEventListener('click', function() {
                             const row = this.closest('tr');
@@ -525,7 +474,6 @@
                             const regionSelect = row.querySelector('.region-select');
                             const region = regionSelect.value;
                             const statusElement = row.querySelector('.download-status');
-                            
                             downloadFile(key, region, statusElement);
                         });
                     });
@@ -542,69 +490,48 @@
                 }
             }
             
-            // Function to download a file with region selection
             async function downloadFile(key, region, statusElement) {
                 try {
                     statusElement.innerHTML = '<span class="status uploading">Generating link...</span>';
                     
                     const response = await fetch('/download', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ key, region })
                     });
                     
                     const result = await response.json();
                     
-                    if (!response.ok) {
-                        throw new Error(result.error || 'Failed to generate download link');
-                    }
+                    if (!response.ok) throw new Error(result.error || 'Failed to generate download link');
                     
                     statusElement.innerHTML = `<span class="status success">Downloading from ${result.regionName}...</span>`;
                     
-                    // Fetch the file as a blob
                     const fileResponse = await fetch(result.downloadUrl);
                     const blob = await fileResponse.blob();
-                    
-                    // Create a temporary URL for the blob
                     const url = window.URL.createObjectURL(blob);
                     
-                    // Create and trigger download
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = key.split('/').pop(); // Use the filename part of the key
+                    a.download = key.split('/').pop();
                     document.body.appendChild(a);
                     a.click();
                     
-                    // Clean up
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
                     
-                    // Clear status after 3 seconds
-                    setTimeout(() => {
-                        statusElement.innerHTML = '';
-                    }, 3000);
-                    
+                    setTimeout(() => statusElement.innerHTML = '', 3000);
                 } catch (error) {
                     console.error('Download failed:', error);
                     statusElement.innerHTML = `<span class="status failed">Error: ${error.message}</span>`;
-                    
-                    // Clear error after 5 seconds
-                    setTimeout(() => {
-                        statusElement.innerHTML = '';
-                    }, 5000);
+                    setTimeout(() => statusElement.innerHTML = '', 5000);
                 }
             }
             
-            // Helper function to format file size
             function formatFileSize(bytes) {
                 if (bytes === 0) return '0 Bytes';
-                
                 const k = 1024;
                 const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
-                
                 return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
             }
         });
