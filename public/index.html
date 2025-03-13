@@ -203,10 +203,69 @@
             margin-bottom: 15px;
             display: block;
         }
+
+        /* Toggle Switch Styling */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #007bff;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
     </style>
 </head>
 <body>
     <h1>S3 File Manager</h1>
+
+    <div style="margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+        <h3>Bucket Object Lock</h3>
+        <label for="bucketObjectLockToggle" style="margin-right: 10px;">
+            Do you want to make sure files don't get modified?
+        </label>
+        <label class="switch">
+            <input type="checkbox" id="bucketObjectLockToggle">
+            <span class="slider round"></span>
+        </label>
+        <span id="bucketObjectLockStatus" style="margin-left: 10px;">Object Lock: Disabled</span>
+        <p id="objectLockMessage" style="font-size: 14px; color: #6c757d; margin-top: 5px;"></p>
+    </div>
     
     <div class="nav">
         <div class="nav-tab active" data-tab="upload">Upload Files</div>
@@ -253,6 +312,75 @@
             // Tab Navigation
             const tabs = document.querySelectorAll('.nav-tab');
             const tabContents = document.querySelectorAll('.tab-content');
+
+            // Object Lock Toggle functionality
+            const bucketObjectLockToggle = document.getElementById('bucketObjectLockToggle');
+            const bucketObjectLockStatus = document.getElementById('bucketObjectLockStatus');
+            const objectLockMessage = document.getElementById('objectLockMessage');
+
+            // Load initial Object Lock status
+            loadObjectLockStatus();
+
+            // Toggle switch event listener
+            bucketObjectLockToggle.addEventListener('change', function() {
+                const enable = this.checked;
+                toggleObjectLock(enable);
+            });
+
+            // Function to load current Object Lock status
+            async function loadObjectLockStatus() {
+                try {
+                    const response = await fetch('/toggle-object-lock');
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to fetch Object Lock status');
+                    }
+
+                    bucketObjectLockToggle.checked = data.enabled;
+                    bucketObjectLockStatus.textContent = data.enabled ? 'Object Lock: Enabled' : 'Object Lock: Disabled';
+                    objectLockMessage.textContent = data.enabled 
+                        ? `Default retention: ${data.mode} mode until ${new Date(data.retainUntil).toLocaleString()}`
+                        : 'Files can be modified or deleted.';
+                } catch (error) {
+                    console.error('Error loading Object Lock status:', error);
+                    objectLockMessage.textContent = `Error: ${error.message}`;
+                    objectLockMessage.style.color = '#721c24';
+                }
+            }
+
+            // Function to toggle Object Lock
+            async function toggleObjectLock(enable) {
+                try {
+                    objectLockMessage.textContent = 'Updating Object Lock status...';
+                    objectLockMessage.style.color = '#004085';
+
+                    const response = await fetch('/toggle-object-lock', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ enable })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || 'Failed to toggle Object Lock');
+                    }
+
+                    bucketObjectLockStatus.textContent = enable ? 'Object Lock: Enabled' : 'Object Lock: Disabled';
+                    objectLockMessage.textContent = enable 
+                        ? `Default retention: ${data.mode} mode until ${new Date(data.retainUntil).toLocaleString()}`
+                        : 'Files can be modified or deleted.';
+                    objectLockMessage.style.color = '#155724';
+                } catch (error) {
+                    console.error('Error toggling Object Lock:', error);
+                    bucketObjectLockToggle.checked = !enable; // Revert toggle on error
+                    objectLockMessage.textContent = `Error: ${error.message}`;
+                    objectLockMessage.style.color = '#721c24';
+                }
+            }
             
             tabs.forEach(tab => {
                 tab.addEventListener('click', function() {

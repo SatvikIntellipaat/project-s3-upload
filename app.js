@@ -4,7 +4,9 @@ const {
   S3Client, 
   PutObjectCommand, 
   ListObjectsV2Command, 
-  GetObjectCommand 
+  GetObjectCommand,
+  PutObjectLockConfigurationCommand,
+  GetObjectLockConfigurationCommand
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const dotenv = require('dotenv');
@@ -197,6 +199,84 @@ app.post('/download', async (req, res) => {
     });
   }
 });
+
+// New endpoint to toggle Object Lock configuration
+app.route('/toggle-object-lock')
+  .get(async (req, res) => {
+    try {
+      const command = new GetObjectLockConfigurationCommand({
+        Bucket: process.env.S3_BUCKET_NAME
+      });
+      const response = await s3Client.send(command);
+
+      const config = response.ObjectLockConfiguration;
+      console.log(config)
+      const enabled = config.ObjectLockEnabled === 'Enabled' && 
+                      config.Rule && 
+                      config.Rule.DefaultRetention;
+
+      res.status(200).json({
+        enabled: !!enabled,
+        mode: enabled ? config.Rule.DefaultRetention.Mode : null,
+        retainUntil: enabled ? calculateRetainUntil(config.Rule.DefaultRetention) : null
+      });
+    } catch (error) {
+      console.error('Error fetching Object Lock status:', error);
+      res.status(500).json({
+        error: 'Failed to fetch Object Lock status',
+        details: error.message
+      });
+    }
+  })
+  .post(async (req, res) => {
+    try {
+      const { enable } = req.body;
+
+      if (typeof enable !== 'boolean') {
+        return res.status(400).json({ error: 'Enable parameter must be a boolean' });
+      }
+
+      const params = {
+        Bucket: process.env.S3_BUCKET_NAME,
+        ObjectLockConfiguration: {
+          ObjectLockEnabled: 'Enabled', // Must be 'Enabled' if bucket has Object Lock
+          Rule: enable ? {
+            DefaultRetention: {
+              Mode: 'GOVERNANCE', // Can be 'GOVERNANCE' or 'COMPLIANCE'
+              Days: 30 // Default retention period of 30 days
+            }
+          } : undefined // Remove Rule to disable default retention
+        }
+      };
+
+      const command = new PutObjectLockConfigurationCommand(params);
+      await s3Client.send(command);
+
+      res.status(200).json({
+        message: enable ? 'Object Lock enabled with default retention' : 'Object Lock retention disabled',
+        enabled: enable,
+        mode: enable ? 'GOVERNANCE' : null,
+        retainUntil: enable ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null
+      });
+    } catch (error) {
+      console.error('Error toggling Object Lock:', error);
+      res.status(500).json({
+        error: 'Failed to toggle Object Lock',
+        details: error.message
+      });
+    }
+  });
+
+// Helper function to calculate retain until date
+function calculateRetainUntil(defaultRetention) {
+  const now = new Date();
+  if (defaultRetention.Days) {
+    return new Date(now.getTime() + defaultRetention.Days * 24 * 60 * 60 * 1000).toISOString();
+  } else if (defaultRetention.Years) {
+    return new Date(now.getTime() + defaultRetention.Years * 365 * 24 * 60 * 60 * 1000).toISOString();
+  }
+  return null;
+}
 
 // Start the server
 app.listen(port, () => {
