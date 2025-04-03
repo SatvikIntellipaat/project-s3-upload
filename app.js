@@ -242,7 +242,7 @@ app.route('/toggle-object-lock')
           ObjectLockEnabled: 'Enabled', // Must be 'Enabled' if bucket has Object Lock
           Rule: enable ? {
             DefaultRetention: {
-              Mode: 'GOVERNANCE', // Can be 'GOVERNANCE' or 'COMPLIANCE'
+              Mode: 'COMPLIANCE', // Can be 'GOVERNANCE' or 'COMPLIANCE'
               Days: 30 // Default retention period of 30 days
             }
           } : undefined // Remove Rule to disable default retention
@@ -255,7 +255,7 @@ app.route('/toggle-object-lock')
       res.status(200).json({
         message: enable ? 'Object Lock enabled with default retention' : 'Object Lock retention disabled',
         enabled: enable,
-        mode: enable ? 'GOVERNANCE' : null,
+        mode: enable ? 'COMPLIANCE' : null,
         retainUntil: enable ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null
       });
     } catch (error) {
